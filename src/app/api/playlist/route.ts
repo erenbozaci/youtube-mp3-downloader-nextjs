@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { YTNodes } from 'youtubei.js';
-import { getInnertube, extractPlaylistId, toVideoDetails, type VideoDetails, VIDEO_INFO_OPTIONS } from '@/lib/youtube';
+import { getInnertube, extractPlaylistId, toVideoDetails, type VideoDetails, getResilientBasicInfo } from '@/lib/youtube';
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
         const batch = uniqueVideoIds.slice(i, i + batchSize);
         const batchResults = await Promise.all(batch.map(async (videoId) => {
           try {
-            const info = await innertube.getBasicInfo(videoId, VIDEO_INFO_OPTIONS);
+            const info = await getResilientBasicInfo(innertube, videoId);
             return toVideoDetails(info.basic_info, `https://www.youtube.com/watch?v=${videoId}`);
           } catch (error) {
             console.error(`Error fetching info for video ${videoId}:`, error);

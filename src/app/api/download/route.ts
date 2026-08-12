@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getInnertube, extractVideoId, AUDIO_FORMAT_OPTIONS, VIDEO_INFO_OPTIONS } from '@/lib/youtube';
+import { getInnertube, extractVideoId, AUDIO_FORMAT_OPTIONS, VIDEO_INFO_OPTIONS, assertVideoAvailable } from '@/lib/youtube';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
 
     const innertube = await getInnertube();
     const info = await innertube.getBasicInfo(videoId, VIDEO_INFO_OPTIONS);
+    assertVideoAvailable(info, videoId);
     const title = (info.basic_info.title || 'ses').replace(/[^\w\s-]/gi, ''); // Remove special characters
 
     // chooseFormat mirrors download()'s internal selection so we can read content_length for the response headers
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Download error:', error);
     return NextResponse.json({
-      error: 'İndirme başarısız. YouTube sistemi güncellenmiş olabilir. Lütfen daha sonra tekrar deneyin.'
+      error: error instanceof Error ? error.message : 'İndirme başarısız. YouTube sistemi güncellenmiş olabilir. Lütfen daha sonra tekrar deneyin.'
     }, { status: 500 });
   }
 }

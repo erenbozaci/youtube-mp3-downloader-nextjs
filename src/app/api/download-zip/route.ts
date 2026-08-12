@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import JSZip from 'jszip';
-import { getInnertube, extractVideoId, AUDIO_FORMAT_OPTIONS, VIDEO_INFO_OPTIONS } from '@/lib/youtube';
+import { getInnertube, extractVideoId, AUDIO_FORMAT_OPTIONS, VIDEO_INFO_OPTIONS, assertVideoAvailable } from '@/lib/youtube';
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
           }
 
           const info = await innertube.getBasicInfo(videoId, VIDEO_INFO_OPTIONS);
+          assertVideoAvailable(info, videoId);
           const title = (info.basic_info.title || 'ses').replace(/[<>:"/\\|?*]/g, '_');
 
           const stream = await info.download(AUDIO_FORMAT_OPTIONS);

@@ -67,7 +67,51 @@ export function toVideoDetails(basicInfo: BasicInfoLike, url: string): VideoDeta
   };
 }
 
+interface VideoInfoLike {
+  basic_info: BasicInfoLike;
+  playability_status?: { status: string; reason: string } | null;
+}
+
+// YouTube sometimes answers a request with a stripped-down, technically-successful
+// response (empty title/duration) instead of an error — seen from datacenter IPs
+// like those Netlify Functions run from. Treat that as a failure instead of quietly
+// showing placeholder text as if it were the real video.
+export function assertVideoAvailable(info: VideoInfoLike, videoId: string): void {
+  if (info.basic_info.title) return;
+
+  const status = info.playability_status;
+  console.error('Empty basic_info from youtubei.js for video', videoId, 'playability_status:', status);
+  throw new Error(
+    status?.reason
+      ? `Video bilgisi alınamadı (${status.status}: ${status.reason})`
+      : 'Video bilgisi alınamadı: YouTube boş yanıt döndürdü'
+  );
+}
+
 export const VIDEO_INFO_OPTIONS = IOS_CLIENT;
+
+// Metadata (unlike streaming) doesn't need IOS specifically — if IOS looks
+// suspicious from a given IP and comes back empty, try other clients before
+// giving up. Only used where we don't also need a downloadable stream from
+// the same response (i.e. not the download routes).
+const METADATA_CLIENT_FALLBACKS = ['IOS', 'ANDROID', 'WEB'] as const;
+
+export async function getResilientBasicInfo(innertube: Innertube, videoId: string) {
+  let lastError: unknown;
+
+  for (const client of METADATA_CLIENT_FALLBACKS) {
+    try {
+      const info = await innertube.getBasicInfo(videoId, { client });
+      if (info.basic_info.title) return info;
+      lastError = new Error(`${client}: boş yanıt (${info.playability_status?.status ?? 'bilinmeyen'})`);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  console.error('All clients returned empty/failed for video', videoId, lastError);
+  throw lastError instanceof Error ? lastError : new Error('Video bilgisi alınamadı');
+}
 
 export const AUDIO_FORMAT_OPTIONS = {
   type: 'audio',

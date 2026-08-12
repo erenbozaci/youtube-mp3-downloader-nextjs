@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getInnertube, extractVideoId, toVideoDetails, VIDEO_INFO_OPTIONS } from '@/lib/youtube';
+import { getInnertube, extractVideoId, toVideoDetails, getResilientBasicInfo } from '@/lib/youtube';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,14 +15,14 @@ export async function POST(request: NextRequest) {
     }
 
     const innertube = await getInnertube();
-    const info = await innertube.getBasicInfo(videoId, VIDEO_INFO_OPTIONS);
+    const info = await getResilientBasicInfo(innertube, videoId);
 
     return NextResponse.json({ videoDetails: toVideoDetails(info.basic_info, url) });
 
   } catch (error) {
     console.error('API error:', error);
     return NextResponse.json({
-      error: 'Video bilgileri alınamadı. YouTube sistemi güncellenmiş olabilir. Lütfen daha sonra tekrar deneyin.'
+      error: error instanceof Error ? error.message : 'Video bilgileri alınamadı. YouTube sistemi güncellenmiş olabilir. Lütfen daha sonra tekrar deneyin.'
     }, { status: 500 });
   }
 }
