@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import ytdl from '@distube/ytdl-core';
+import { getInnertube, extractVideoId, AUDIO_FORMAT_OPTIONS, VIDEO_INFO_OPTIONS } from '@/lib/youtube';
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,64 +9,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'URL gereklidir' }, { status: 400 });
     }
 
-    // Validate YouTube URL
-    if (!ytdl.validateURL(url)) {
+    const videoId = extractVideoId(url);
+    if (!videoId) {
       return NextResponse.json({ error: 'Geçersiz YouTube URL\'si' }, { status: 400 });
     }
 
-    // Get video info
-    const info = await ytdl.getInfo(url, {
-      requestOptions: {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      }
-    });
-    
-    const title = info.videoDetails.title.replace(/[^\w\s-]/gi, ''); // Remove special characters
-    
-    // Get highest quality audio stream (usually MP4 with AAC codec)
-    const audioStream = ytdl(url, {
-      quality: 'highestaudio',
-      filter: format => format.hasAudio && !format.hasVideo,
-      requestOptions: {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      }
-    });
+    const innertube = await getInnertube();
+    const info = await innertube.getBasicInfo(videoId, VIDEO_INFO_OPTIONS);
+    const title = (info.basic_info.title || 'ses').replace(/[^\w\s-]/gi, ''); // Remove special characters
 
-    // Convert Node.js Readable to Web ReadableStream
-    const readableStream = new ReadableStream({
-      start(controller) {
-        audioStream.on('data', (chunk: Buffer) => {
-          controller.enqueue(new Uint8Array(chunk));
-        });
-        audioStream.on('end', () => {
-          controller.close();
-        });
-        audioStream.on('error', (error) => {
-          controller.error(error);
-        });
-      }
-    });
+    // chooseFormat mirrors download()'s internal selection so we can read content_length for the response headers
+    const format = info.chooseFormat(AUDIO_FORMAT_OPTIONS);
+    const stream = await info.download(AUDIO_FORMAT_OPTIONS);
 
-    // Set response headers for MP4 audio (AAC codec - high quality)
     const headers = new Headers({
       'Content-Type': 'audio/mp4',
       'Content-Disposition': `attachment; filename="${title}.m4a"`,
     });
+    if (format.content_length) {
+      headers.set('Content-Length', String(format.content_length));
+    }
 
-    // Return the stream as response
-    return new Response(readableStream, {
+    return new Response(stream, {
       status: 200,
       headers,
     });
 
   } catch (error) {
     console.error('Download error:', error);
-    return NextResponse.json({ 
-      error: 'İndirme başarısız. YouTube sistemi güncellenmiş olabilir. Lütfen daha sonra tekrar deneyin.' 
+    return NextResponse.json({
+      error: 'İndirme başarısız. YouTube sistemi güncellenmiş olabilir. Lütfen daha sonra tekrar deneyin.'
     }, { status: 500 });
   }
 }

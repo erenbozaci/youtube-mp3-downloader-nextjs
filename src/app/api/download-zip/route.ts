@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import ytdl from '@distube/ytdl-core';
 import JSZip from 'jszip';
+import { getInnertube, extractVideoId, AUDIO_FORMAT_OPTIONS, VIDEO_INFO_OPTIONS } from '@/lib/youtube';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,6 +14,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Maksimum 50 video indirilebilir' }, { status: 400 });
     }
 
+    const innertube = await getInnertube();
     const zip = new JSZip();
     const failedDownloads: string[] = [];
 
@@ -23,68 +24,33 @@ export async function POST(request: NextRequest) {
 
     for (let i = 0; i < urls.length; i += batchSize) {
       const batch = urls.slice(i, i + batchSize);
-      
+
       const batchPromises = batch.map(async (url: string, index: number) => {
         try {
-          if (!ytdl.validateURL(url)) {
+          const videoId = extractVideoId(url);
+          if (!videoId) {
             failedDownloads.push(`Geçersiz URL: ${url}`);
-            return null;
+            return;
           }
 
-          // Get video info first to get the title
-          const info = await ytdl.getInfo(url, {
-            requestOptions: {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-              }
-            }
-          });
+          const info = await innertube.getBasicInfo(videoId, VIDEO_INFO_OPTIONS);
+          const title = (info.basic_info.title || 'ses').replace(/[<>:"/\\|?*]/g, '_');
 
-          const title = info.videoDetails.title.replace(/[<>:"/\\|?*]/g, '_');
-          
-          // Get audio stream
-          const audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
-          
-          if (audioFormats.length === 0) {
-            failedDownloads.push(`${title}: Ses formatı bulunamadı`);
-            return null;
-          }
+          const stream = await info.download(AUDIO_FORMAT_OPTIONS);
+          const buffer = Buffer.from(await new Response(stream).arrayBuffer());
 
-          // Use best quality audio format
-          const selectedFormat = audioFormats[0];
-
-          const stream = ytdl.downloadFromInfo(info, { format: selectedFormat });
-          const chunks: Buffer[] = [];
-
-          return new Promise<void>((resolve, reject) => {
-            stream.on('data', (chunk: Buffer) => {
-              chunks.push(chunk);
-            });
-
-            stream.on('end', () => {
-              const buffer = Buffer.concat(chunks);
-              const fileName = `${String(i + index + 1).padStart(2, '0')} - ${title}.m4a`;
-              zip.file(fileName, buffer);
-              completedCount++;
-              resolve();
-            });
-
-            stream.on('error', (error: Error) => {
-              failedDownloads.push(`${title}: ${error.message}`);
-              reject(error);
-            });
-          });
-
+          const fileName = `${String(i + index + 1).padStart(2, '0')} - ${title}.m4a`;
+          zip.file(fileName, buffer);
+          completedCount++;
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Bilinmeyen hata';
           failedDownloads.push(`URL ${i + index + 1}: ${errorMessage}`);
-          return null;
         }
       });
 
       // Wait for current batch to complete
       await Promise.allSettled(batchPromises);
-      
+
       // Add a small delay between batches
       if (i + batchSize < urls.length) {
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -92,14 +58,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (completedCount === 0) {
-      return NextResponse.json({ 
-        error: 'Hiçbir video indirilemedi', 
-        failures: failedDownloads 
+      return NextResponse.json({
+        error: 'Hiçbir video indirilemedi',
+        failures: failedDownloads
       }, { status: 400 });
     }
 
     // Generate ZIP file
-    const zipBuffer = await zip.generateAsync({ 
+    const zipBuffer = await zip.generateAsync({
       type: 'nodebuffer',
       compression: 'DEFLATE',
       compressionOptions: { level: 6 }
@@ -121,7 +87,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('ZIP download error:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'ZIP dosyası oluşturulurken hata oluştu: ' + (error instanceof Error ? error.message : 'Bilinmeyen hata')
     }, { status: 500 });
   }

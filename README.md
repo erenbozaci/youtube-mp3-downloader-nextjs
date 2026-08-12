@@ -46,7 +46,7 @@ ve tarayıcıda [http://localhost:3000](http://localhost:3000) adresini açın.
 
 ## Geliştirici Notları
 
-- Next.js 15, React 19, TailwindCSS, ytdl-core, jszip kullanır.
+- Next.js 16, React 19, TailwindCSS, youtubei.js, jszip kullanır.
 - Sadece M4A formatı desteklenir (daha kararlı ve hızlı).
 - Playlist desteği için YouTube sayfa analiz yöntemi kullanılır (YouTube API anahtarı gerekmez).
 - Tüm kod ve arayüz Türkçedir.
