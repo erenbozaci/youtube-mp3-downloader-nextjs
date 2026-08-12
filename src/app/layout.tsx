@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -42,9 +42,13 @@ export const metadata: Metadata = {
     title: "YouTube Ses İndirici",
     description: "YouTube videolarından yüksek kaliteli M4A ses dosyaları indirin"
   },
-  viewport: "width=device-width, initial-scale=1",
-  themeColor: "#ef4444",
   manifest: "/manifest.json"
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#ef4444",
 };
 
 export default function RootLayout({

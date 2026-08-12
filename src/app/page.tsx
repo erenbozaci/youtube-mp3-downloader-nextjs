@@ -57,12 +57,13 @@ export default function Home() {
   // Geçmiş için
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
-  // Geçmişi ve listeyi localStorage'dan yükle
+  // Geçmişi ve listeyi localStorage'dan yükle (mount'ta bir kez)
   useEffect(() => {
     const savedHistory = localStorage.getItem('download-history');
     if (savedHistory) {
       try {
         const parsedHistory = JSON.parse(savedHistory);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setHistory(parsedHistory.map((item: HistoryItem & { downloadedAt: string }) => ({
           ...item,
           downloadedAt: new Date(item.downloadedAt)
